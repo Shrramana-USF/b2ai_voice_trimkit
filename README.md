@@ -50,6 +50,21 @@ Trimmed files are saved in a `Final_trim` folder in the same directory as the or
 - Click **Quit Application** in the sidebar or
 - Press `Ctrl+C` in the terminal
 
+## Troubleshooting
+
+**"Could not find ffmpeg or avconv"** - Install ffmpeg:
+
+```bash
+# macOS
+brew install ffmpeg
+
+# Ubuntu/Debian
+sudo apt install ffmpeg
+
+# Windows
+choco install ffmpeg
+```
+
 ## Dependencies
 
 - numpy, pandas, streamlit
