@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "b2ai_voice_trimkit"
-version = "0.1.1"
+version = "0.1.3"
 description = "Audio trimming tool for acoustic researchers with Praat/parselmouth integration"
 readme = "README.md"
 license = "MIT"
