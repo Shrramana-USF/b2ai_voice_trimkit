@@ -1152,7 +1152,7 @@ if uploaded_csv is not None:
         st.stop()
 
     st.success(f"Loaded {len(df)} audio files")
-    st.dataframe(df[['audio_file_path']].head(10), use_container_width=True)
+    st.dataframe(df[['audio_file_path']].head(10), width='stretch')
 
     # Initialize session state for results
     if 'processing_results' not in st.session_state:
@@ -1163,6 +1163,8 @@ if uploaded_csv is not None:
 
     # SUSTAINED VOWEL PROCESSING
     if task_type == "Sustained Vowel":
+        review_all = st.checkbox("Review all files before saving", key="vowel_review_all")
+
         if st.button("Process All Files", type="primary"):
             st.session_state.processing_results = []
             progress_bar = st.progress(0)
@@ -1188,6 +1190,12 @@ if uploaded_csv is not None:
                 st.session_state.processing_results.append(result)
 
                 progress_bar.progress((idx + 1) / len(df))
+
+            # If review_all is checked, force all to needs_review
+            if review_all:
+                for r in st.session_state.processing_results:
+                    if r['status'] == 'completed':
+                        r['status'] = 'needs_review'
 
             status_text.text("Processing complete!")
             st.rerun()
@@ -1219,7 +1227,7 @@ if uploaded_csv is not None:
                 }
                 for r in results
             ])
-            st.dataframe(results_df, use_container_width=True)
+            st.dataframe(results_df, width='stretch')
 
             # MANUAL REVIEW SECTION
             review_results = [r for r in results if r['status'] == 'needs_review']
@@ -1261,7 +1269,7 @@ if uploaded_csv is not None:
 
                 with col1:
                     st.markdown("#### Energy-Based Trim")
-                    st.plotly_chart(plot_waveform(y_e, sr, f"E-Trimmed ({current['e_duration']:.2f}s)"), use_container_width=True)
+                    st.plotly_chart(plot_waveform(y_e, sr, f"E-Trimmed ({current['e_duration']:.2f}s)"), width='stretch')
                     st.audio(current['e_trimmed_path'])
                     if st.button("Accept E-Trim", key=f"accept_e_{review_idx}"):
                         # Copy to final folder
@@ -1275,7 +1283,7 @@ if uploaded_csv is not None:
 
                 with col2:
                     st.markdown("#### Pitch-Based Trim (Praat)")
-                    st.plotly_chart(plot_waveform(y_p, sr, f"P-Trimmed ({current['p_duration']:.2f}s)"), use_container_width=True)
+                    st.plotly_chart(plot_waveform(y_p, sr, f"P-Trimmed ({current['p_duration']:.2f}s)"), width='stretch')
                     st.audio(current['p_trimmed_path'])
                     if st.button("Accept P-Trim", key=f"accept_p_{review_idx}"):
                         # Copy to final folder
@@ -1303,7 +1311,7 @@ if uploaded_csv is not None:
                 # Use plotly chart with selection
                 event = st.plotly_chart(
                     fig,
-                    use_container_width=True,
+                    width='stretch',
                     on_select="rerun",
                     selection_mode="box",
                     key=f"waveform_select_{review_idx}"
@@ -1326,7 +1334,7 @@ if uploaded_csv is not None:
                 if start_sec != end_sec:
                     st.plotly_chart(
                         plot_waveform_with_selection(y, sr, start_sec, end_sec, "Selection Preview"),
-                        use_container_width=True
+                        width='stretch'
                     )
 
                 st.audio(current['wav_path'])
@@ -1366,6 +1374,8 @@ if uploaded_csv is not None:
 
     # SPEECH PROCESSING
     elif task_type == "Speech":
+        review_all_speech = st.checkbox("Review all files before saving", key="speech_review_all")
+
         if st.button("Process All Files", type="primary"):
             st.session_state.processing_results = []
             progress_bar = st.progress(0)
@@ -1379,6 +1389,12 @@ if uploaded_csv is not None:
                 st.session_state.processing_results.append(result)
 
                 progress_bar.progress((idx + 1) / len(df))
+
+            # If review_all is checked, force all to needs_review
+            if review_all_speech:
+                for r in st.session_state.processing_results:
+                    if r['status'] == 'completed':
+                        r['status'] = 'needs_review'
 
             status_text.text("Processing complete!")
             st.rerun()
@@ -1407,7 +1423,7 @@ if uploaded_csv is not None:
                 }
                 for r in results
             ])
-            st.dataframe(results_df, use_container_width=True)
+            st.dataframe(results_df, width='stretch')
 
     # BREATHING PROCESSING (Manual)
     elif task_type == "Breathing":
@@ -1415,6 +1431,8 @@ if uploaded_csv is not None:
         if breathing_mode == "Auto-trim silence":
             st.subheader("Auto-Trim Silence from Breathing Files")
             st.markdown("Automatically trim leading and trailing silence from all files, keeping all breathing sounds.")
+
+            review_all_breathing = st.checkbox("Review all files before saving", key="breathing_review_all")
 
             if st.button("Process All Files", type="primary"):
                 st.session_state.processing_results = []
@@ -1440,17 +1458,31 @@ if uploaded_csv is not None:
                         y_trimmed = trim_silence_only(y, sr, threshold_ratio=silence_thresh)
                         trimmed_duration = get_duration(y_trimmed, sr)
 
-                        # Save
-                        final_path = os.path.join(final_folder, f"{base_name}_breath_final.wav")
-                        sf.write(final_path, y_trimmed, sr)
+                        if review_all_breathing:
+                            # Don't save yet, mark for review
+                            st.session_state.processing_results.append({
+                                'audio_path': audio_path,
+                                'status': 'needs_review',
+                                'original_duration': original_duration,
+                                'trimmed_duration': trimmed_duration,
+                                'wav_path': wav_path,
+                                'y_trimmed': y_trimmed,
+                                'sr': sr,
+                                'final_folder': final_folder,
+                                'base_name': base_name
+                            })
+                        else:
+                            # Save immediately
+                            final_path = os.path.join(final_folder, f"{base_name}_breath_final.wav")
+                            sf.write(final_path, y_trimmed, sr)
 
-                        st.session_state.processing_results.append({
-                            'audio_path': audio_path,
-                            'status': 'completed',
-                            'original_duration': original_duration,
-                            'trimmed_duration': trimmed_duration,
-                            'final_path': final_path
-                        })
+                            st.session_state.processing_results.append({
+                                'audio_path': audio_path,
+                                'status': 'completed',
+                                'original_duration': original_duration,
+                                'trimmed_duration': trimmed_duration,
+                                'final_path': final_path
+                            })
 
                     except Exception as e:
                         st.session_state.processing_results.append({
@@ -1485,7 +1517,7 @@ if uploaded_csv is not None:
                     }
                     for r in results
                 ])
-                st.dataframe(results_df, use_container_width=True)
+                st.dataframe(results_df, width='stretch')
 
         # MANUAL TRIM MODE
         else:
@@ -1554,7 +1586,7 @@ if uploaded_csv is not None:
                 # Show waveform
                 st.plotly_chart(
                     plot_waveform(y, sr, "Waveform"),
-                    use_container_width=True
+                    width='stretch'
                 )
 
                 st.audio(wav_path)
@@ -1572,7 +1604,7 @@ if uploaded_csv is not None:
 
                 event = st.plotly_chart(
                     fig,
-                    use_container_width=True,
+                    width='stretch',
                     on_select="rerun",
                     selection_mode="box",
                     key=f"breathing_waveform_select_{file_idx}"
@@ -1631,6 +1663,8 @@ if uploaded_csv is not None:
 
     # COUGH PROCESSING
     elif task_type == "Cough":
+        review_all_cough = st.checkbox("Review all files before saving", key="cough_review_all")
+
         if st.button("Process All Files", type="primary"):
             st.session_state.processing_results = []
             progress_bar = st.progress(0)
@@ -1653,6 +1687,12 @@ if uploaded_csv is not None:
                 st.session_state.processing_results.append(result)
 
                 progress_bar.progress((idx + 1) / len(df))
+
+            # If review_all is checked, force all to needs_review
+            if review_all_cough:
+                for r in st.session_state.processing_results:
+                    if r['status'] == 'completed':
+                        r['status'] = 'needs_review'
 
             status_text.text("Processing complete!")
             st.rerun()
@@ -1685,7 +1725,7 @@ if uploaded_csv is not None:
                 }
                 for r in results
             ])
-            st.dataframe(results_df, use_container_width=True)
+            st.dataframe(results_df, width='stretch')
 
             # COUGH MANUAL REVIEW SECTION
             review_results = [r for r in results if r['status'] == 'needs_review']
@@ -1726,7 +1766,7 @@ if uploaded_csv is not None:
                 if segments:
                     st.plotly_chart(
                         plot_waveform_with_segments(y, sr, segments, "Waveform with Detected Segments"),
-                        use_container_width=True
+                        width='stretch'
                     )
 
                     # Table-like layout: Segment | Player | Accept (each row)
@@ -1759,7 +1799,7 @@ if uploaded_csv is not None:
                 else:
                     st.plotly_chart(
                         plot_waveform(y, sr, "Original Waveform (No segments detected)"),
-                        use_container_width=True
+                        width='stretch'
                     )
                     st.audio(current['wav_path'])
 
@@ -1779,7 +1819,7 @@ if uploaded_csv is not None:
                 # Use plotly chart with selection
                 event = st.plotly_chart(
                     fig,
-                    use_container_width=True,
+                    width='stretch',
                     on_select="rerun",
                     selection_mode="box",
                     key=f"cough_waveform_select_{review_idx}"
@@ -1802,7 +1842,7 @@ if uploaded_csv is not None:
                 if start_sec != end_sec and (end_sec - start_sec) < current['original_duration']:
                     st.plotly_chart(
                         plot_waveform_with_selection(y, sr, start_sec, end_sec, "Selection Preview"),
-                        use_container_width=True
+                        width='stretch'
                     )
                     # Preview audio
                     s_idx = int(start_sec * sr)
@@ -1846,6 +1886,8 @@ if uploaded_csv is not None:
 
     # EVERYTHING FUSED PROCESSING
     elif task_type == "Everything Fused":
+        review_all_fused = st.checkbox("Review all files before saving", key="fused_review_all")
+
         if st.button("Process All Files", type="primary"):
             st.session_state.processing_results = []
             progress_bar = st.progress(0)
@@ -1860,6 +1902,12 @@ if uploaded_csv is not None:
                 st.session_state.processing_results.append(result)
 
                 progress_bar.progress((idx + 1) / len(df))
+
+            # If review_all is checked, force all to needs_review
+            if review_all_fused:
+                for r in st.session_state.processing_results:
+                    if r['status'] == 'completed':
+                        r['status'] = 'needs_review'
 
             status_text.text("Processing complete!")
             st.rerun()
@@ -1891,7 +1939,7 @@ if uploaded_csv is not None:
                 }
                 for r in results
             ])
-            st.dataframe(results_df, use_container_width=True)
+            st.dataframe(results_df, width='stretch')
 
             # FUSED MANUAL REVIEW SECTION
             review_results = [r for r in results if r['status'] == 'needs_review']
@@ -1935,7 +1983,7 @@ if uploaded_csv is not None:
                     display_labels = [f"Task {i+1}" for i in range(len(segments))]
                     st.plotly_chart(
                         plot_waveform_with_segments(y, sr, segments, "Waveform with Detected Segments", labels=display_labels),
-                        use_container_width=True
+                        width='stretch'
                     )
 
                     # Initialize accepted segments tracker
@@ -1997,7 +2045,7 @@ if uploaded_csv is not None:
                 else:
                     st.plotly_chart(
                         plot_waveform(y, sr, "Original Waveform (No segments detected)"),
-                        use_container_width=True
+                        width='stretch'
                     )
 
                 st.audio(current['wav_path'])
@@ -2025,7 +2073,7 @@ if uploaded_csv is not None:
 
                 event = st.plotly_chart(
                     fig,
-                    use_container_width=True,
+                    width='stretch',
                     on_select="rerun",
                     selection_mode="box",
                     key=f"fused_waveform_select_{review_idx}"
@@ -2139,7 +2187,7 @@ if uploaded_csv is not None:
             # Show waveform
             st.plotly_chart(
                 plot_waveform(y, sr, "Waveform"),
-                use_container_width=True
+                width='stretch'
             )
 
             st.audio(wav_path)
@@ -2157,7 +2205,7 @@ if uploaded_csv is not None:
 
             event = st.plotly_chart(
                 fig,
-                use_container_width=True,
+                width='stretch',
                 on_select="rerun",
                 selection_mode="box",
                 key=f"general_waveform_select_{file_idx}"
